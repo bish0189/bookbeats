@@ -1,0 +1,122 @@
+{
+	"name": "pipeBooksEditionsSQLToSQLDWViaADL",
+	"properties": {
+		"activities": [
+			{
+				"name": "1_BooksEditions_From_SQLBB_To_ADL",
+				"type": "Copy",
+				"policy": {
+					"timeout": "00:20:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 600
+				},
+				"typeProperties": {
+					"source": {
+						"type": "SqlSource",
+						"sqlReaderQuery": "select Id, Title, Isbn, Description, Cover, Publisher, [PublishDate], [Language], CreatedAt, ModifiedAt, [DeletedAt], Book_Id, ContentType, Pages, Duration, [BookBeatPublishDate], [BookBeatViewDate], [BookBeatUnpublishDate], [ShortDescription], SerializedApprovals, SerializedMarketRights, SerializedCopyrightOwners from [dbo].[Editions]"
+					},
+					"sink": {
+						"writeBatchSize": 0,
+						"writeBatchTimeout": "00:00:00"
+					},
+					"enableStaging": false
+				}
+			},
+			{
+				"name": "2_BooksEditions_From_ADL_To_ADLLatest",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "1_BooksEditions_From_SQLBB_To_ADL",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "00:20:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 600
+				},
+				"typeProperties": {
+					"source": {
+						"type": "AzureDataLakeStoreSource",
+						"recursive": false
+					},
+					"sink": {
+						"writeBatchSize": 0,
+						"writeBatchTimeout": "00:00:00"
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"columnMappings": {
+							"Id": "Id",
+							"Title": "Title",
+							"Isbn": "Isbn",
+							"Cover": "Cover",
+							"Publisher": "Publisher",
+							"PublishDate": "PublishDate",
+							"Language": "Language",
+							"CreatedAt": "CreatedAt",
+							"ModifiedAt": "ModifiedAt",
+							"DeletedAt": "DeletedAt",
+							"Book_Id": "Book_Id",
+							"ContentType": "ContentType",
+							"Pages": "Pages",
+							"Duration": "Duration",
+							"BookBeatPublishDate": "BookBeatPublishDate",
+							"BookBeatViewDate": "BookBeatViewDate",
+							"BookBeatUnpublishDate": "BookBeatUnpublishDate",
+							"SerializedApprovals": "SerializedApprovals",
+							"SerializedMarketRights": "SerializedMarketRights",
+							"SerializedCopyrightOwners": "SerializedCopyrightOwners"
+						}
+					}
+				}
+			},
+			{
+				"name": "3_BooksEditions_From_Stg_To_Hist",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "2_BooksEditions_From_ADL_To_ADLLatest",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "00:20:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 600
+				},
+				"typeProperties": {
+					"storedProcedureName": "[labshist].[HandleHistoryBooksEditions]",
+					"storedProcedureParameters": {
+						"SliceEnd": {
+							"value": {
+								"value": "@formatDateTime(pipeline().parameters.WindowEnd, 'yyyy-MM-dd HH:mm:ss')",
+								"type": "Expression"
+							}
+						},
+						"SliceStart": {
+							"value": {
+								"value": "@formatDateTime(pipeline().parameters.WindowStart, 'yyyy-MM-dd HH:mm:ss')",
+								"type": "Expression"
+							}
+						}
+					}
+				}
+			}
+		],
+		"parameters": {
+			"WindowEnd": {
+				"type": "String"
+			},
+			"WindowStart": {
+				"type": "String"
+			}
+		}
+	}
+}
